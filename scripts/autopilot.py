@@ -167,52 +167,71 @@ if enableRPC == True:
 
 
 def startup():
-    global detectChoice
-    global sparkTime
-    cpydLog("info",("Displaying menu"))
+   global detectChoice
+   global sparkTime
+   global noticeData
+   global skipNotices
+   cpydLog("info",("Downloading notice list"))
+   if os.path.exists("./resources/.notices"): os.system("rm ./resources/.notices")
+   os.system("wget -q --output-document=./resources/.notices --no-cache --no-cookies https://gist.github.com/Coopydood/b0887a6e21614c7c490ab3969662407f/raw/notices.json")
+   if os.path.exists("./resources/.notices"): cpydLog("ok",("Notice list downloaded"))
+   cpydLog("info",("Checking notice list"))
+   noticeFile = open("resources/.notices")
+   noticeData = json.load(noticeFile)
 
-    sparkTime = int(time.time())
+   #print(noticeData)
 
-    print("\n\n   "+color.BOLD+color.PURPLE+"AUTOPILOT"+color.END+color.GRAY,"(FL"+str(FEATURE_LEVEL)+")"+color.END)
-    print("   by",color.BOLD+"Coopydood\n"+color.END)
-    print("   The purpose of this script is to automatically guide you through \n   the process of",color.BOLD+"creating and running a basic macOS VM",color.END+"using settings \n   based on answers to a number of questions. \n\n   Many of the values can be left to default - especially if you are unsure.\n   It won't be perfect, but it's supposed to make it as"+color.BOLD,"easy as possible."+color.END)
-    #print(color.BOLD+"\n"+"   Profile:"+color.END,"https://github.com/Coopydood")
-    #print(color.BOLD+"      Repo:"+color.END,"https://github.com/Coopydood/ultimate-macOS-KVM") # no shameless plugs anymore :[
-    if enableLog == False:
-       print("\n   "+"  "+color.BOLD+"──────────────────────────────────────────────────────────────",color.END)
-       print("   "+color.BOLD+color.YELLOW+"   ⚠ "+color.END+color.BOLD+" LOGGING DISABLED"+color.END)
-       print("   "+color.END+"      The logfile has been disabled. \n         No diagnostic information will be recorded."+color.END)
-       print("   "+"  "+color.BOLD+"──────────────────────────────────────────────────────────────",color.END)
+   if noticeData is not None:
+      cpydLog("ok",("Notice list loaded"))
+   else:
+      cpydLog("error",("Notice list could not be loaded"))
+      cpydLog("warn",("Skipping notice hooks"))
+      skipNotices = True
 
-       #print(color.YELLOW+"\n   ⚠"+color.END+color.BOLD+" WARNING"+color.END)
-       #print("   Logging has been disabled")
-    #print("   Continue whenever you're ready, or return to the main menu.")
-    print(color.BOLD+"\n      1. Start")
-    print(color.END+"         Begin creating a new QEMU-based macOS config file \n")
-    print(color.END+"      2. Main menu")
-    print(color.END+"      ?. Help")
-    print(color.END+"      Q. Exit\n")
-    cpydLog("ok",str("Menu displayed"))
-    cpydLog("wait",("Waiting on user input"))
-    detectChoice = str(input(color.BOLD+"Select> "+color.END))
-    cpydLog("ok",str("User input received"))
-    # EXPERIMENTAL MENU, NOT FINISHED OR IN USE
-    #global detectChoice
-    #print("\n\n   Welcome to"+color.BOLD+color.PURPLE,"AutoPilot"+color.END,"")
-    #print("   Created by",color.BOLD+"Coopydood\n"+color.END)
-    #print("   Welcome to AutoPilot - an advanced configuration automation tool.\n   To get started, choose an operation mode from the options below."+color.END)#print(color.BOLD+"\n"+"Profile:"+color.END,"https://github.com/Coopydood")
-    #print(color.BOLD+"   Repo:"+color.END,"https://github.com/Coopydood/ultimate-macOS-KVM")
-    #print(color.BOLD+"\n      1. Create boot script... (default)")
-    #print(color.END+"         AutoPilot will ask you a series of questions, of which\n         your answers will define the configuration. This will\n         then be processed to generate a valid file.")
-    #print(color.BOLD+"\n      2. Create boot script and add to virt-manager...")
-    #print(color.END+"         Use this option if you do not have an AutoPilot config file.\n         This script will take you through the AutoPilot steps before\n         generating an XML file based on your answers. No existing\n         data, such as vHDDs, can be used with this method.")
-    #print(color.BOLD+"\n      3. Import XML file...")
-    #print(color.END+"         Use this option if you already have an XML file.\n         This option lets you import a previously-created XML file\n         into virsh for use with virt-manager.\n")
-  
-    #print(color.END+"      ?. Help")
-    #print(color.END+"      M. Main menu")
-    #print(color.END+"      Q. Exit\n")
-    #detectChoice = str(input(color.BOLD+"Select> "+color.END))
+   cpydLog("info",("Marking spark timestamp"))
+   sparkTime = int(time.time())
+   
+   cpydLog("info",("Displaying menu"))
+   print("\n\n   "+color.BOLD+color.PURPLE+"AUTOPILOT"+color.END+color.GRAY,"(FL"+str(FEATURE_LEVEL)+")"+color.END)
+   print("   by",color.BOLD+"Coopydood\n"+color.END)
+   print("   The purpose of this script is to automatically guide you through \n   the process of",color.BOLD+"creating and running a basic macOS VM",color.END+"using settings \n   based on answers to a number of questions. \n\n   Many of the values can be left to default - especially if you are unsure.\n   It won't be perfect, but it's supposed to make it as"+color.BOLD,"easy as possible."+color.END)
+   #print(color.BOLD+"\n"+"   Profile:"+color.END,"https://github.com/Coopydood")
+   #print(color.BOLD+"      Repo:"+color.END,"https://github.com/Coopydood/ultimate-macOS-KVM") # no shameless plugs anymore :[
+   if enableLog == False:
+      print("\n   "+"  "+color.BOLD+"──────────────────────────────────────────────────────────────",color.END)
+      print("   "+color.BOLD+color.YELLOW+"   ⚠ "+color.END+color.BOLD+" LOGGING DISABLED"+color.END)
+      print("   "+color.END+"      The logfile has been disabled. \n         No diagnostic information will be recorded."+color.END)
+      print("   "+"  "+color.BOLD+"──────────────────────────────────────────────────────────────",color.END)
+
+      #print(color.YELLOW+"\n   ⚠"+color.END+color.BOLD+" WARNING"+color.END)
+      #print("   Logging has been disabled")
+   #print("   Continue whenever you're ready, or return to the main menu.")
+   print(color.BOLD+"\n      1. Start")
+   print(color.END+"         Begin creating a new QEMU-based macOS config file \n")
+   print(color.END+"      2. Main menu")
+   print(color.END+"      ?. Help")
+   print(color.END+"      Q. Exit\n")
+   cpydLog("ok",str("Menu displayed"))
+   cpydLog("wait",("Waiting on user input"))
+   detectChoice = str(input(color.BOLD+"Select> "+color.END))
+   cpydLog("ok",str("User input received"))
+   # EXPERIMENTAL MENU, NOT FINISHED OR IN USE
+   #global detectChoice
+   #print("\n\n   Welcome to"+color.BOLD+color.PURPLE,"AutoPilot"+color.END,"")
+   #print("   Created by",color.BOLD+"Coopydood\n"+color.END)
+   #print("   Welcome to AutoPilot - an advanced configuration automation tool.\n   To get started, choose an operation mode from the options below."+color.END)#print(color.BOLD+"\n"+"Profile:"+color.END,"https://github.com/Coopydood")
+   #print(color.BOLD+"   Repo:"+color.END,"https://github.com/Coopydood/ultimate-macOS-KVM")
+   #print(color.BOLD+"\n      1. Create boot script... (default)")
+   #print(color.END+"         AutoPilot will ask you a series of questions, of which\n         your answers will define the configuration. This will\n         then be processed to generate a valid file.")
+   #print(color.BOLD+"\n      2. Create boot script and add to virt-manager...")
+   #print(color.END+"         Use this option if you do not have an AutoPilot config file.\n         This script will take you through the AutoPilot steps before\n         generating an XML file based on your answers. No existing\n         data, such as vHDDs, can be used with this method.")
+   #print(color.BOLD+"\n      3. Import XML file...")
+   #print(color.END+"         Use this option if you already have an XML file.\n         This option lets you import a previously-created XML file\n         into virsh for use with virt-manager.\n")
+
+   #print(color.END+"      ?. Help")
+   #print(color.END+"      M. Main menu")
+   #print(color.END+"      Q. Exit\n")
+   #detectChoice = str(input(color.BOLD+"Select> "+color.END))
 
 def clear(): print("\n" * 150)
 
