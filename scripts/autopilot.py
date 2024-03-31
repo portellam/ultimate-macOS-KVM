@@ -44,8 +44,10 @@ parser.add_argument("--disable-logging", dest="disableLog", help="Disables the l
 parser.add_argument("--disable-rpc", dest="disableRPC", help="Disables Discord rich presence",action="store_true")
 parser.add_argument("--disable-blob-check", dest="disableBlobCheck", help="Bypasses checking of blob integrity",action="store_true")
 parser.add_argument("--skip-summary", dest="skipSummary", help="Starts the AutoPilot flow immediately after questioning",action="store_true")
+parser.add_argument("--skip-notices", dest="skipNotices", help="Don't download and load notices",action="store_true")
 parser.add_argument("--no-auto-download", dest="customDownload", help="Asks the user what to download during run",action="store_true")
 parser.add_argument("--no-cleanup", dest="disableCleanup", help="Doesn't clean blob files after run",action="store_true")
+
 
 
 args = parser.parse_args()
@@ -83,6 +85,11 @@ if args.customDownload == True:
 
 if args.skipSummary == True:
    showSummary = False
+
+if args.skipNotices == True:
+   skipNotices = True
+else:
+   skipNotices = False
 
 version = open("./.version")
 version = version.read()
@@ -171,22 +178,67 @@ def startup():
    global sparkTime
    global noticeData
    global skipNotices
-   cpydLog("info",("Downloading notice list"))
-   if os.path.exists("./resources/.notices"): os.system("rm ./resources/.notices")
-   os.system("wget -q --output-document=./resources/.notices --no-cache --no-cookies https://gist.github.com/Coopydood/b0887a6e21614c7c490ab3969662407f/raw/notices.json")
-   if os.path.exists("./resources/.notices"): cpydLog("ok",("Notice list downloaded"))
-   cpydLog("info",("Checking notice list"))
-   noticeFile = open("resources/.notices")
-   noticeData = json.load(noticeFile)
-
-   #print(noticeData)
-
-   if noticeData is not None:
-      cpydLog("ok",("Notice list loaded"))
+   global noticeGoBackAction
+   clear()
+   if skipNotices == True:
+      cpydLog("warn",("Skipping notice list"))
    else:
-      cpydLog("error",("Notice list could not be loaded"))
-      cpydLog("warn",("Skipping notice hooks"))
-      skipNotices = True
+      cpydLog("info",("Downloading notice list"))
+      if os.path.exists("./resources/.notices"): os.system("rm ./resources/.notices")
+      try:
+         os.system("wget --output-document=./resources/.notices -q --no-cache --no-cookies --no-dns-cache --no-check-certificate https://gist.github.com/Coopydood/b0887a6e21614c7c490ab3969662407f/raw/notices.json")
+      except Exception:
+         skipNotices = True
+         cpydLog("error",("Couldn't download notice list, skipping for this session"))
+         return False
+      if os.path.exists("./resources/.notices"): 
+         cpydLog("ok",("Notice list downloaded"))
+         cpydLog("info",("Checking notice list"))
+         try:
+            noticeFile = open("resources/.notices")
+            noticeData = json.load(noticeFile)
+            global notices
+            global noticeArray
+            notices = [y for y in noticeData['autopilot']]
+            #print(notices)
+
+            noticeGoBackAction = False
+
+            noticeArray = []
+            
+            for x in notices:
+               noticeArray.append(x)
+            
+            global stageHooks
+            stageHooks = []
+            currentRun = -1
+
+            for notices in noticeArray:
+               currentRun = currentRun + 1
+               stageHooks.append([currentRun, notices["stage"], notices["selectionTriggerMode"], notices["selectionTrigger"], notices["type"]])
+         
+         except Exception:
+            skipNotices = True
+            cpydLog("error",("Couldn't load notice list, skipping for this session"))
+            return False
+
+      
+
+      if noticeData is not None:
+         cpydLog("ok",("Notice list loaded"))
+      else:
+         cpydLog("error",("Notice list could not be loaded"))
+         cpydLog("warn",("Skipping notice hooks"))
+         skipNotices = True
+
+   if skipNotices == True:
+      stageHooks = [[0,0,0,0,0,0]]
+      activeNotice = {}
+      notices = {}
+      noticeArray = []
+      noticeGoBackAction = False
+      armSelectionTriggerNotice = False
+      triggerValue = None
 
    cpydLog("info",("Marking spark timestamp"))
    sparkTime = int(time.time())
@@ -238,6 +290,76 @@ def clear(): print("\n" * 150)
 clear()
 startup()
 clear()
+
+def showNotice():
+   global noticeGoBackAction
+   if skipNotices != True:
+      clear()
+      cpydLog("warn",("A notice condition has been triggered"))
+      cpydLog("info",("Showing notice"))
+      if activeNotice["type"] == "critical" or activeNotice["blockAccess"] == True:
+         print("\n\n  "+color.BOLD+color.RED,activeNotice["title"].upper()+color.END,"")
+      elif activeNotice["type"] == "warning":
+         print("\n\n  "+color.BOLD+color.YELLOW,activeNotice["title"].upper()+color.END,"")
+      elif activeNotice["type"] == "info":
+         print("\n\n  "+color.BOLD+color.BLUE,activeNotice["title"].upper()+color.END,"")
+      else:
+         print("\n\n  "+color.BOLD,activeNotice["title"].upper()+color.END,"")
+      print("  ",activeNotice["subTitle"]+color.END+"\n")
+      if activeNotice["detailsL1"] != "": print("  ",activeNotice["detailsL1"])
+      if activeNotice["detailsL2"] != "": print("  ",activeNotice["detailsL2"])
+      if activeNotice["detailsL3"] != "": print("  ",activeNotice["detailsL3"])
+      if activeNotice["detailsL4"] != "": print("  ",activeNotice["detailsL4"])
+      if activeNotice["detailsL5"] != "": print("  ",activeNotice["detailsL5"])
+      if activeNotice["detailsL6"] != "": print("  ",activeNotice["detailsL6"])
+      if activeNotice["detailsL7"] != "": print("  ",activeNotice["detailsL7"])
+      if activeNotice["blockAccess"] != True: 
+         print("\n  ",color.BOLD+color.GREEN+"◆"+color.END+color.BOLD+"  You can still continue."+color.END)
+      else:
+         print("\n  ",color.BOLD+color.RED+"◆"+color.END+color.BOLD+"  You cannot continue."+color.END)
+      print("\n  ",color.BOLD+"Last updated:",color.END+str(datetime.fromtimestamp(os.path.getmtime("./resources/.notices")).strftime("%d/%m/%Y %H:%M:%S"))+"\n")
+      
+
+      if activeNotice["blockAccess"] != True: 
+         cpydLog("warn",("Non-critical notice, user can continue"))
+         print(color.BOLD+"      1. Continue")
+         
+      else:
+         cpydLog("fatal",("Critical notice, user cannot continue this flow"))
+      if activeNotice["hasGitIssue"] == True: print(color.END+"      I. Open issue page...")
+      print(color.END+"      B. Back...\n")
+      #print(color.END+"      Q. Exit\n")
+      noticeChoice = str(input(color.BOLD+"Select> "+color.END))
+
+      if noticeChoice == "1" and activeNotice["blockAccess"] != True:
+         clear()
+         return
+      elif noticeChoice == "1" and activeNotice["blockAccess"] == True:
+         clear()
+         showNotice()
+      elif noticeChoice == "i" and activeNotice["hasGitIssue"] == True or noticeChoice == "I" and activeNotice["hasGitIssue"] == True:
+         clear()
+         cpydLog("ok",("Contacting xdg-open with URL"))
+         print("\n\n   "+color.BOLD+color.GREEN+"✔  OPENING GITHUB ISSUE PAGE IN DEFAULT BROWSER"+color.END,"")
+         print("   Continue in your browser\n")
+         print("\n   I have attempted to open this notice's issue page in\n   your default browser. Please be patient.\n\n   You will be returned to the last screen in 5 seconds.\n\n\n\n\n")
+         os.system('xdg-open '+activeNotice["gitIssueURL"]+' > /dev/null 2>&1')
+         time.sleep(6)
+         clear()
+         showNotice()
+      elif noticeChoice == "2" and activeNotice["hasGitIssue"] == False:
+         clear()
+         showNotice()
+      elif noticeChoice == "b" or noticeChoice == "B":
+         noticeGoBackAction = True
+         return 
+
+      #elif noticeChoice == "q" or noticeChoice == "Q":
+      #   return exit
+      else:
+         clear()
+         showNotice()
+   
 
 def autopilot():
    global USR_CPU_SOCKS
@@ -294,6 +416,10 @@ def autopilot():
    global customValue
    customValue = 0
 
+   global activeNotice
+
+   activeNotice = {}
+
    cpydLog("info",("FEATURE LEVEL "+str(FEATURE_LEVEL)))
    
    def stage15():
@@ -319,7 +445,36 @@ def autopilot():
       global USR_CREATE_XML
       global USR_CFG_XML
       global USR_TARGET_OS_NAME
-      
+      currentStage = 15
+      global stageHooks
+      global activeNotice
+      global notices
+      global noticeGoBackAction
+      global triggerValue
+      global armSelectionTriggerNotice
+      triggerValue = None
+      x = 0
+      for x in stageHooks:
+         if x[1] == currentStage and x[2] == False:
+            cpydLog("warn",str("Notice hook has been hit"))
+            activeNotice = noticeArray[x[0]]
+            cpydLog("info",str("Disarming notice selection trigger"))
+            armSelectionTriggerNotice = False
+            cpydLog("info",str("Requesting notice display"))
+            showNotice()
+            activeNotice = None
+            break
+         elif x[1] == currentStage and x[2] == True:
+            cpydLog("warn",str("Notice hook has been hit"))
+            cpydLog("warn",str("Arming notice selection trigger"))
+            armSelectionTriggerNotice = True
+            triggerValue = str(x[3])
+            activeNotice = noticeArray[x[0]]
+            break 
+      if noticeGoBackAction == True:
+         customValue = 0
+         noticeGoBackAction = False
+         stage14()
       cpydLog("ok",str("Interrogation complete, displaying summary and AP autoflow sliproad"))
       USR_CFG_XML = USR_CFG.replace(".sh",".xml")
       try: # DISCORD RPC
@@ -414,7 +569,15 @@ def autopilot():
          print("    "+color.END+"  ?. Help")
          print("    "+color.END+"  Q. Exit\n")
          stageSelect = str(input(color.BOLD+"Select> "+color.END))
-      
+
+         if str(stageSelect) == triggerValue and armSelectionTriggerNotice == True:
+            cpydLog("warn",str("Selection notice trap has been triggered"))
+            clear()
+            armSelectionTriggerNotice = False
+            cpydLog("info",str("Disarming notice selection trigger"))
+            cpydLog("info",str("Requesting notice display"))
+            showNotice()
+
          if stageSelect == "1":
             #cpydLog("ok",str("Using default value of "+str(defaultValue)))
             handoff()
@@ -423,7 +586,7 @@ def autopilot():
             stage14()
 
          elif stageSelect == "x" or stageSelect == "X":
-            global customValue
+            
             currentStage = 1
             customValue = 0
             stage1()
@@ -450,6 +613,36 @@ def autopilot():
    def stage14():
       global customValue
       global currentStage
+      currentStage = 14
+      global stageHooks
+      global activeNotice
+      global notices
+      global noticeGoBackAction
+      global triggerValue
+      global armSelectionTriggerNotice
+      triggerValue = None
+      x = 0
+      for x in stageHooks:
+         if x[1] == currentStage and x[2] == False:
+            cpydLog("warn",str("Notice hook has been hit"))
+            activeNotice = noticeArray[x[0]]
+            cpydLog("info",str("Disarming notice selection trigger"))
+            armSelectionTriggerNotice = False
+            cpydLog("info",str("Requesting notice display"))
+            showNotice()
+            activeNotice = None
+            break
+         elif x[1] == currentStage and x[2] == True:
+            cpydLog("warn",str("Notice hook has been hit"))
+            cpydLog("warn",str("Arming notice selection trigger"))
+            armSelectionTriggerNotice = True
+            triggerValue = str(x[3])
+            activeNotice = noticeArray[x[0]]
+            break 
+      if noticeGoBackAction == True:
+         customValue = 0
+         noticeGoBackAction = False
+         stage13()
       global USR_CREATE_XML
       defaultValue = "True"
       cpydLog("ok",str("Stage 14 sequence initiated"))
@@ -470,7 +663,15 @@ def autopilot():
       print(color.END+"      ?. Help")
       print(color.END+"      Q. Exit\n   ")
       stageSelect = str(input(color.BOLD+"Select> "+color.END))
-      
+
+      if str(stageSelect) == triggerValue and armSelectionTriggerNotice == True:
+            cpydLog("warn",str("Selection notice trap has been triggered"))
+            clear()
+            armSelectionTriggerNotice = False
+            cpydLog("info",str("Disarming notice selection trigger"))
+            cpydLog("info",str("Requesting notice display"))
+            showNotice()
+
       if stageSelect == "1":
          cpydLog("ok",str("Using default value of "+str(defaultValue)))
          USR_CREATE_XML = "True"
@@ -513,6 +714,36 @@ def autopilot():
       global customValue
       global currentStage
       global USR_SCREEN_RES
+      currentStage = 13
+      global stageHooks
+      global activeNotice
+      global notices
+      global noticeGoBackAction
+      global triggerValue
+      global armSelectionTriggerNotice
+      triggerValue = None
+      x = 0
+      for x in stageHooks:
+         if x[1] == currentStage and x[2] == False:
+            cpydLog("warn",str("Notice hook has been hit"))
+            activeNotice = noticeArray[x[0]]
+            cpydLog("info",str("Disarming notice selection trigger"))
+            armSelectionTriggerNotice = False
+            cpydLog("info",str("Requesting notice display"))
+            showNotice()
+            activeNotice = None
+            break
+         elif x[1] == currentStage and x[2] == True:
+            cpydLog("warn",str("Notice hook has been hit"))
+            cpydLog("warn",str("Arming notice selection trigger"))
+            armSelectionTriggerNotice = True
+            triggerValue = str(x[3])
+            activeNotice = noticeArray[x[0]]
+            break 
+      if noticeGoBackAction == True:
+         customValue = 0
+         noticeGoBackAction = False
+         stage12()
       defaultValue = "1280x720"
       cpydLog("ok",str("Stage 13 sequence initiated"))
       clear()
@@ -583,7 +814,15 @@ def autopilot():
             print(color.END+"      ?. Help")
             print(color.END+"      Q. Exit\n   ")
             stageSelect = str(input(color.BOLD+"Select> "+color.END))
-         
+
+            if str(stageSelect) == triggerValue and armSelectionTriggerNotice == True:
+               cpydLog("warn",str("Selection notice trap has been triggered"))
+               clear()
+               armSelectionTriggerNotice = False
+               cpydLog("info",str("Disarming notice selection trigger"))
+               cpydLog("info",str("Requesting notice display"))
+               showNotice()
+
             if stageSelect == "1":
                cpydLog("ok",str("Using default value of "+str(defaultValue)))
                USR_SCREEN_RES = "1280x720"
@@ -627,6 +866,36 @@ def autopilot():
       global currentStage
       global USR_BOOT_FILE
       defaultValue = "BaseSystem.img"
+      currentStage = 12
+      global stageHooks
+      global activeNotice
+      global notices
+      global noticeGoBackAction
+      global triggerValue
+      global armSelectionTriggerNotice
+      triggerValue = None
+      x = 0
+      for x in stageHooks:
+         if x[1] == currentStage and x[2] == False:
+            cpydLog("warn",str("Notice hook has been hit"))
+            activeNotice = noticeArray[x[0]]
+            cpydLog("info",str("Disarming notice selection trigger"))
+            armSelectionTriggerNotice = False
+            cpydLog("info",str("Requesting notice display"))
+            showNotice()
+            activeNotice = None
+            break
+         elif x[1] == currentStage and x[2] == True:
+            cpydLog("warn",str("Notice hook has been hit"))
+            cpydLog("warn",str("Arming notice selection trigger"))
+            armSelectionTriggerNotice = True
+            triggerValue = str(x[3])
+            activeNotice = noticeArray[x[0]]
+            break 
+      if noticeGoBackAction == True:
+         customValue = 0
+         noticeGoBackAction = False
+         stage11()
       cpydLog("ok",str("Stage 12 sequence initiated"))
 
       try: # DISCORD RPC
@@ -676,6 +945,15 @@ def autopilot():
          print(color.END+"      ?. Help")
          print(color.END+"      Q. Exit\n   ")
          stageSelect = str(input(color.BOLD+"Select> "+color.END))
+
+         if str(stageSelect) == triggerValue and armSelectionTriggerNotice == True:
+            cpydLog("warn",str("Selection notice trap has been triggered"))
+            clear()
+            armSelectionTriggerNotice = False
+            cpydLog("info",str("Disarming notice selection trigger"))
+            cpydLog("info",str("Requesting notice display"))
+            showNotice()
+
          if stageSelect == "1" and USR_TARGET_OS >= 100 and USR_TARGET_OS <= 1012:
             stage12()
          elif stageSelect == "1":
@@ -734,6 +1012,36 @@ def autopilot():
       global customValue
       global currentStage
       global USR_MAC_ADDRESS
+      currentStage = 11
+      global stageHooks
+      global activeNotice
+      global notices
+      global noticeGoBackAction
+      global triggerValue
+      global armSelectionTriggerNotice
+      triggerValue = None
+      x = 0
+      for x in stageHooks:
+         if x[1] == currentStage and x[2] == False:
+            cpydLog("warn",str("Notice hook has been hit"))
+            activeNotice = noticeArray[x[0]]
+            cpydLog("info",str("Disarming notice selection trigger"))
+            armSelectionTriggerNotice = False
+            cpydLog("info",str("Requesting notice display"))
+            showNotice()
+            activeNotice = None
+            break
+         elif x[1] == currentStage and x[2] == True:
+            cpydLog("warn",str("Notice hook has been hit"))
+            cpydLog("warn",str("Arming notice selection trigger"))
+            armSelectionTriggerNotice = True
+            triggerValue = str(x[3])
+            activeNotice = noticeArray[x[0]]
+            break 
+      if noticeGoBackAction == True:
+         customValue = 0
+         noticeGoBackAction = False
+         stage10()
       defaultValue = "00:16:cb:00:21:09"
       cpydLog("ok",str("Stage 11 sequence initiated"))
 
@@ -770,7 +1078,15 @@ def autopilot():
          print(color.END+"      ?. Help")
          print(color.END+"      Q. Exit\n   ")
          stageSelect = str(input(color.BOLD+"Select> "+color.END))
-      
+
+         if str(stageSelect) == triggerValue and armSelectionTriggerNotice == True:
+            cpydLog("warn",str("Selection notice trap has been triggered"))
+            clear()
+            armSelectionTriggerNotice = False
+            cpydLog("info",str("Disarming notice selection trigger"))
+            cpydLog("info",str("Requesting notice display"))
+            showNotice()
+
          if stageSelect == "1":
             cpydLog("ok",str("Using default value of "+str(defaultValue)))
             USR_MAC_ADDRESS = "00:16:cb:00:21:09"
@@ -829,6 +1145,38 @@ def autopilot():
       global customValue
       global currentStage
       global USR_TARGET_OS
+      currentStage = 10
+
+      global stageHooks
+      global activeNotice
+      global notices
+      global noticeGoBackAction
+      global triggerValue
+      global armSelectionTriggerNotice
+      triggerValue = None
+      x = 0
+      for x in stageHooks:
+         if x[1] == currentStage and x[2] == False:
+            cpydLog("warn",str("Notice hook has been hit"))
+            activeNotice = noticeArray[x[0]]
+            cpydLog("info",str("Disarming notice selection trigger"))
+            armSelectionTriggerNotice = False
+            cpydLog("info",str("Requesting notice display"))
+            showNotice()
+            activeNotice = None
+            break
+         elif x[1] == currentStage and x[2] == True:
+            cpydLog("warn",str("Notice hook has been hit"))
+            cpydLog("warn",str("Arming notice selection trigger"))
+            armSelectionTriggerNotice = True
+            triggerValue = str(x[3])
+            activeNotice = noticeArray[x[0]]
+            break 
+      if noticeGoBackAction == True:
+         customValue = 0
+         noticeGoBackAction = False
+         stage9()
+
       cpydLog("ok",str("Stage 10 sequence initiated"))
       if USR_TARGET_OS >= 100 and USR_TARGET_OS <= 1012:
          defaultValue = "e1000-82545em"
@@ -868,7 +1216,15 @@ def autopilot():
          print(color.END+"      ?. Help")
          print(color.END+"      Q. Exit\n   ")
          stageSelect = str(input(color.BOLD+"Select> "+color.END))
-      
+
+         if str(stageSelect) == triggerValue and armSelectionTriggerNotice == True:
+            cpydLog("warn",str("Selection notice trap has been triggered"))
+            clear()
+            armSelectionTriggerNotice = False
+            cpydLog("info",str("Disarming notice selection trigger"))
+            cpydLog("info",str("Requesting notice display"))
+            showNotice()
+
          if stageSelect == "1":
             cpydLog("ok",str("Using default value of "+str(defaultValue)))
             USR_NETWORK_DEVICE = defaultValue
@@ -908,6 +1264,37 @@ def autopilot():
       global USR_HDD_ISPHYSICAL
       global customValue
       global currentStage
+      currentStage = 9
+
+      global stageHooks
+      global activeNotice
+      global notices
+      global noticeGoBackAction
+      global triggerValue
+      global armSelectionTriggerNotice
+      triggerValue = None
+      x = 0
+      for x in stageHooks:
+         if x[1] == currentStage and x[2] == False:
+            cpydLog("warn",str("Notice hook has been hit"))
+            activeNotice = noticeArray[x[0]]
+            cpydLog("info",str("Disarming notice selection trigger"))
+            armSelectionTriggerNotice = False
+            cpydLog("info",str("Requesting notice display"))
+            showNotice()
+            activeNotice = None
+            break
+         elif x[1] == currentStage and x[2] == True:
+            cpydLog("warn",str("Notice hook has been hit"))
+            cpydLog("warn",str("Arming notice selection trigger"))
+            armSelectionTriggerNotice = True
+            triggerValue = str(x[3])
+            activeNotice = noticeArray[x[0]]
+            break 
+      if noticeGoBackAction == True:
+         customValue = 0
+         noticeGoBackAction = False
+         stage8()
       defaultValue = "HDD"
       cpydLog("ok",str("Stage 9 sequence initiated"))
 
@@ -938,6 +1325,14 @@ def autopilot():
       print(color.END+"      Q. Exit\n   ")
       stageSelect = str(input(color.BOLD+"Select> "+color.END))
       
+      if str(stageSelect) == triggerValue and armSelectionTriggerNotice == True:
+            cpydLog("warn",str("Selection notice trap has been triggered"))
+            clear()
+            armSelectionTriggerNotice = False
+            cpydLog("info",str("Disarming notice selection trigger"))
+            cpydLog("info",str("Requesting notice display"))
+            showNotice()
+
       if stageSelect == "1":
          cpydLog("ok",str("Using default value of "+str(defaultValue)))
          cpydLog("ok",str("Will set disk up as an HDD"))
@@ -994,6 +1389,38 @@ def autopilot():
       global USR_HDD_ISPHYSICAL
       global customValue
       global currentStage
+      currentStage = 8
+      
+      global stageHooks
+      global activeNotice
+      global notices
+      global noticeGoBackAction
+      global triggerValue
+      global armSelectionTriggerNotice
+      triggerValue = None
+      x = 0
+      for x in stageHooks:
+         if x[1] == currentStage and x[2] == False:
+            cpydLog("warn",str("Notice hook has been hit"))
+            activeNotice = noticeArray[x[0]]
+            cpydLog("info",str("Disarming notice selection trigger"))
+            armSelectionTriggerNotice = False
+            cpydLog("info",str("Requesting notice display"))
+            showNotice()
+            activeNotice = None
+            break
+         elif x[1] == currentStage and x[2] == True:
+            cpydLog("warn",str("Notice hook has been hit"))
+            cpydLog("warn",str("Arming notice selection trigger"))
+            armSelectionTriggerNotice = True
+            triggerValue = str(x[3])
+            activeNotice = noticeArray[x[0]]
+            break 
+      if noticeGoBackAction == True:
+         customValue = 0
+         noticeGoBackAction = False
+         stage7()
+      
       defaultValue = "80G"
       USR_HDD_ISPHYSICAL = False
       cpydLog("ok",str("Stage 8 sequence initiated"))
@@ -1096,7 +1523,15 @@ def autopilot():
          print(color.END+"      ?. Help")
          print(color.END+"      Q. Exit\n   ")
          stageSelect = str(input(color.BOLD+"Select> "+color.END))
-      
+
+         if str(stageSelect) == triggerValue and armSelectionTriggerNotice == True:
+            cpydLog("warn",str("Selection notice trap has been triggered"))
+            clear()
+            armSelectionTriggerNotice = False
+            cpydLog("info",str("Disarming notice selection trigger"))
+            cpydLog("info",str("Requesting notice display"))
+            showNotice()
+
          if stageSelect == "1":
             cpydLog("ok",str("Using default value of "+str(defaultValue)))
             USR_HDD_SIZE = defaultValue
@@ -1149,7 +1584,39 @@ def autopilot():
       global USR_ALLOCATED_RAM
       global customValue
       global currentStage
+      currentStage = 7
       defaultValue = "4G"
+
+      global stageHooks
+      global activeNotice
+      global notices
+      global noticeGoBackAction
+      global triggerValue
+      global armSelectionTriggerNotice
+      triggerValue = None
+      x = 0
+      for x in stageHooks:
+         if x[1] == currentStage and x[2] == False:
+            cpydLog("warn",str("Notice hook has been hit"))
+            activeNotice = noticeArray[x[0]]
+            cpydLog("info",str("Disarming notice selection trigger"))
+            armSelectionTriggerNotice = False
+            cpydLog("info",str("Requesting notice display"))
+            showNotice()
+            activeNotice = None
+            break
+         elif x[1] == currentStage and x[2] == True:
+            cpydLog("warn",str("Notice hook has been hit"))
+            cpydLog("warn",str("Arming notice selection trigger"))
+            armSelectionTriggerNotice = True
+            triggerValue = str(x[3])
+            activeNotice = noticeArray[x[0]]
+            break 
+      if noticeGoBackAction == True:
+         customValue = 0
+         noticeGoBackAction = False
+         stage6()
+
       cpydLog("ok",str("Stage 7 sequence initiated"))
 
       try: # DISCORD RPC
@@ -1184,7 +1651,15 @@ def autopilot():
          print(color.END+"      ?. Help")
          print(color.END+"      Q. Exit\n   ")
          stageSelect = str(input(color.BOLD+"Select> "+color.END))
-      
+
+         if str(stageSelect) == triggerValue and armSelectionTriggerNotice == True:
+            cpydLog("warn",str("Selection notice trap has been triggered"))
+            clear()
+            armSelectionTriggerNotice = False
+            cpydLog("info",str("Disarming notice selection trigger"))
+            cpydLog("info",str("Requesting notice display"))
+            showNotice()
+
          if stageSelect == "1":
             cpydLog("ok",str("Using default value of "+str(defaultValue)))
             USR_ALLOCATED_RAM = defaultValue
@@ -1223,6 +1698,38 @@ def autopilot():
       global USR_CPU_FEATURE_ARGS
       global customValue
       global currentStage
+      currentStage = 6
+
+      global stageHooks
+      global activeNotice
+      global notices
+      global noticeGoBackAction
+      global triggerValue
+      global armSelectionTriggerNotice
+      triggerValue = None
+      x = 0
+      for x in stageHooks:
+         if x[1] == currentStage and x[2] == False:
+            cpydLog("warn",str("Notice hook has been hit"))
+            activeNotice = noticeArray[x[0]]
+            cpydLog("info",str("Disarming notice selection trigger"))
+            armSelectionTriggerNotice = False
+            cpydLog("info",str("Requesting notice display"))
+            showNotice()
+            activeNotice = None
+            break
+         elif x[1] == currentStage and x[2] == True:
+            cpydLog("warn",str("Notice hook has been hit"))
+            cpydLog("warn",str("Arming notice selection trigger"))
+            armSelectionTriggerNotice = True
+            triggerValue = str(x[3])
+            activeNotice = noticeArray[x[0]]
+            break 
+      if noticeGoBackAction == True:
+         customValue = 0
+         noticeGoBackAction = False
+         stage5()
+
       defaultValue = "+ssse3,+sse4.2,+popcnt,+avx,+aes,+xsave,+xsaveopt,check"
       cpydLog("ok",str("Stage 6 sequence initiated"))
 
@@ -1258,7 +1765,15 @@ def autopilot():
          print(color.END+"      ?. Help")
          print(color.END+"      Q. Exit\n   ")
          stageSelect = str(input(color.BOLD+"Select> "+color.END))
-      
+         
+         if str(stageSelect) == triggerValue and armSelectionTriggerNotice == True:
+            cpydLog("warn",str("Selection notice trap has been triggered"))
+            clear()
+            armSelectionTriggerNotice = False
+            cpydLog("info",str("Disarming notice selection trigger"))
+            cpydLog("info",str("Requesting notice display"))
+            showNotice()
+
          if stageSelect == "1":
             cpydLog("ok",str("Using default value of "+str(defaultValue)))
             USR_CPU_FEATURE_ARGS = defaultValue
@@ -1298,6 +1813,38 @@ def autopilot():
       global USR_TARGET_OS
       global customValue
       global currentStage
+      currentStage = 5
+
+      global stageHooks
+      global activeNotice
+      global notices
+      global noticeGoBackAction
+      global triggerValue
+      global armSelectionTriggerNotice
+      triggerValue = None
+      x = 0
+      for x in stageHooks:
+         if x[1] == currentStage and x[2] == False:
+            cpydLog("warn",str("Notice hook has been hit"))
+            activeNotice = noticeArray[x[0]]
+            cpydLog("info",str("Disarming notice selection trigger"))
+            armSelectionTriggerNotice = False
+            cpydLog("info",str("Requesting notice display"))
+            showNotice()
+            activeNotice = None
+            break
+         elif x[1] == currentStage and x[2] == True:
+            cpydLog("warn",str("Notice hook has been hit"))
+            cpydLog("warn",str("Arming notice selection trigger"))
+            armSelectionTriggerNotice = True
+            triggerValue = str(x[3])
+            activeNotice = noticeArray[x[0]]
+            break 
+      if noticeGoBackAction == True:
+         customValue = 0
+         noticeGoBackAction = False
+         stage4()
+
       if USR_TARGET_OS >= 1013 or USR_TARGET_OS <= 99:
          defaultValue = "Haswell-noTSX"
       else:
@@ -1337,6 +1884,14 @@ def autopilot():
          print(color.END+"      Q. Exit\n   ")
          stageSelect = str(input(color.BOLD+"Select> "+color.END))
       
+         if str(stageSelect) == triggerValue and armSelectionTriggerNotice == True:
+            cpydLog("warn",str("Selection notice trap has been triggered"))
+            clear()
+            armSelectionTriggerNotice = False
+            cpydLog("info",str("Disarming notice selection trigger"))
+            cpydLog("info",str("Requesting notice display"))
+            showNotice()
+
          if stageSelect == "1":
             cpydLog("ok",str("Using default value of "+str(defaultValue)))
             USR_CPU_MODEL = defaultValue
@@ -1376,6 +1931,38 @@ def autopilot():
       global customValue
       global currentStage
       defaultValue = 2
+      currentStage = 4
+
+      global stageHooks
+      global activeNotice
+      global notices
+      global noticeGoBackAction
+      global triggerValue
+      global armSelectionTriggerNotice
+      triggerValue = None
+      x = 0
+      for x in stageHooks:
+         if x[1] == currentStage and x[2] == False:
+            cpydLog("warn",str("Notice hook has been hit"))
+            activeNotice = noticeArray[x[0]]
+            cpydLog("info",str("Disarming notice selection trigger"))
+            armSelectionTriggerNotice = False
+            cpydLog("info",str("Requesting notice display"))
+            showNotice()
+            activeNotice = None
+            break
+         elif x[1] == currentStage and x[2] == True:
+            cpydLog("warn",str("Notice hook has been hit"))
+            cpydLog("warn",str("Arming notice selection trigger"))
+            armSelectionTriggerNotice = True
+            triggerValue = str(x[3])
+            activeNotice = noticeArray[x[0]]
+            break 
+      if noticeGoBackAction == True:
+         customValue = 0
+         noticeGoBackAction = False
+         stage3()
+
       cpydLog("ok",str("Stage 4 sequence initiated"))
 
       try: # DISCORD RPC
@@ -1408,7 +1995,15 @@ def autopilot():
          print(color.END+"      ?. Help")
          print(color.END+"      Q. Exit\n   ")
          stageSelect = str(input(color.BOLD+"Select> "+color.END))
-      
+
+         if str(stageSelect) == 1 and armSelectionTriggerNotice == True:
+            cpydLog("warn",str("Selection notice trap has been triggered"))
+            clear()
+            armSelectionTriggerNotice = False
+            cpydLog("info",str("Disarming notice selection trigger"))
+            cpydLog("info",str("Requesting notice display"))
+            showNotice()
+
          if stageSelect == "1":
             cpydLog("ok",str("Using default value of "+str(defaultValue)))
             USR_CPU_THREADS = defaultValue
@@ -1450,8 +2045,38 @@ def autopilot():
       global USR_TARGET_OS_NAME
       global customValue
       global currentStage
+      global noticeGoBackAction
+      triggerValue = None
       defaultValue = 2
+      currentStage = 3
       cpydLog("ok",str("Stage 3 sequence initiated"))
+
+      global stageHooks
+      global activeNotice
+      global notices
+      global noticeGoBackAction
+      x = 0
+      for x in stageHooks:
+         if x[1] == currentStage and x[2] == False:
+            cpydLog("warn",str("Notice hook has been hit"))
+            activeNotice = noticeArray[x[0]]
+            cpydLog("info",str("Disarming notice selection trigger"))
+            armSelectionTriggerNotice = False
+            cpydLog("info",str("Requesting notice display"))
+            showNotice()
+            activeNotice = None
+            break
+         elif x[1] == currentStage and x[2] == True:
+            cpydLog("warn",str("Notice hook has been hit"))
+            cpydLog("warn",str("Arming notice selection trigger"))
+            armSelectionTriggerNotice = True
+            triggerValue = str(x[3])
+            activeNotice = noticeArray[x[0]]
+            break 
+      if noticeGoBackAction == True:
+         customValue = 0
+         noticeGoBackAction = False
+         stage2()
 
       #if USR_TARGET_OS >= 11 and USR_TARGET_OS <= 99:
       #   USR_TARGET_OS = USR_TARGET_OS * 100
@@ -1555,6 +2180,14 @@ def autopilot():
          print(color.END+"      Q. Exit\n   ")
          stageSelect = str(input(color.BOLD+"Select> "+color.END))
       
+         if str(stageSelect) == triggerValue and armSelectionTriggerNotice == True:
+            cpydLog("warn",str("Selection notice trap has been triggered"))
+            clear()
+            armSelectionTriggerNotice = False
+            cpydLog("info",str("Disarming notice selection trigger"))
+            cpydLog("info",str("Requesting notice display"))
+            showNotice()
+
          if stageSelect == "1":
             cpydLog("ok",str("Using default value of "+str(defaultValue)))
             USR_CPU_CORES = defaultValue
@@ -1593,7 +2226,37 @@ def autopilot():
       global USR_TARGET_OS
       global customValue
       global currentStage
+
       defaultValue = 12
+      currentStage = 2 
+
+      global stageHooks
+      global activeNotice
+      global notices
+      global noticeGoBackAction
+      triggerValue = None
+      x = 0
+      for x in stageHooks:
+         if x[1] == currentStage and x[2] == False:
+            cpydLog("warn",str("Notice hook has been hit"))
+            activeNotice = noticeArray[x[0]]
+            cpydLog("info",str("Disarming notice selection trigger"))
+            armSelectionTriggerNotice = False
+            cpydLog("info",str("Requesting notice display"))
+            showNotice()
+            activeNotice = None
+            break
+         elif x[1] == currentStage and x[2] == True:
+            cpydLog("warn",str("Notice hook has been hit"))
+            cpydLog("warn",str("Arming notice selection trigger"))
+            armSelectionTriggerNotice = True
+            triggerValue = str(x[3])
+            activeNotice = noticeArray[x[0]]
+            break 
+      if noticeGoBackAction == True:
+         customValue = 0
+         noticeGoBackAction = False
+         stage1()
 
       try: # DISCORD RPC
          RPC.update(large_image="ultmos",large_text=projectVer,details="AutoPilot",state="Selecting macOS version",start=sparkTime,buttons=([{"label": "View on GitHub", "url": "https://github.com/Coopydood/ultimate-macOS-KVM"}])) 
@@ -1603,6 +2266,7 @@ def autopilot():
 
       cpydLog("ok",str("Stage 2 sequence initiated"))
       clear()
+
       print("\n   "+color.BOLD+"Set target OS"+color.END)
       print("   Step 2")
       print("\n   This configures networking and image download version. \n   The most suitable network adapter will be automatically\n   selected for you based on this later."+color.END)
@@ -1637,11 +2301,18 @@ def autopilot():
          elif customInput == "8":
             customValue = 2
             stage2()
-            
 
          else:
             customValue = 1
             stage2()
+
+         if str(customInput) == triggerValue and armSelectionTriggerNotice == True:
+            cpydLog("warn",str("Selection notice trap has been triggered"))
+            clear()
+            armSelectionTriggerNotice = False
+            cpydLog("info",str("Disarming notice selection trigger"))
+            cpydLog("info",str("Requesting notice display"))
+            showNotice()
 
          USR_TARGET_OS = customInput
          cpydLog("ok",str("Custom value was set to "+str(customInput)))               #+".sh" #<--- change required prefix/suffix
@@ -1697,7 +2368,15 @@ def autopilot():
          print(color.END+"      ?. Help")
          print(color.END+"      Q. Exit\n   ")
          stageSelect = str(input(color.BOLD+"Select> "+color.END))
-      
+
+         if str(stageSelect) == triggerValue and armSelectionTriggerNotice == True:
+            cpydLog("warn",str("Selection notice trap has been triggered"))
+            clear()
+            armSelectionTriggerNotice = False
+            cpydLog("info",str("Disarming notice selection trigger"))
+            cpydLog("info",str("Requesting notice display"))
+            showNotice()
+
          if stageSelect == "1":
             cpydLog("ok",str("Using default value of "+str(defaultValue)))
             USR_TARGET_OS = defaultValue
@@ -1803,6 +2482,37 @@ def autopilot():
       global USR_CFG
       global customValue
       global currentStage
+      currentStage = 1
+
+      global stageHooks
+      global activeNotice
+      global notices
+      global noticeGoBackAction
+      global triggerValue
+      global armSelectionTriggerNotice
+      triggerValue = None
+      x = 0
+      for x in stageHooks:
+         if x[1] == currentStage and x[2] == False:
+            cpydLog("warn",str("Notice hook has been hit"))
+            activeNotice = noticeArray[x[0]]
+            cpydLog("info",str("Disarming notice selection trigger"))
+            armSelectionTriggerNotice = False
+            cpydLog("info",str("Requesting notice display"))
+            showNotice()
+            activeNotice = None
+            break
+         elif x[1] == currentStage and x[2] == True:
+            cpydLog("warn",str("Notice hook has been hit"))
+            cpydLog("warn",str("Arming notice selection trigger"))
+            armSelectionTriggerNotice = True
+            triggerValue = str(x[3])
+            activeNotice = noticeArray[x[0]]
+            break 
+      if noticeGoBackAction == True:
+         customValue = 0
+         noticeGoBackAction = False
+         startup()
       cpydLog("ok",str("Stage 1 sequence initiated"))
       # remove stale blobs
       cpydLog("ok",str("Removing stale blobs"))
@@ -1842,7 +2552,15 @@ def autopilot():
          print(color.END+"\n      ?. Help")
          print(color.END+"      Q. Exit\n")
          stageSelect = str(input(color.BOLD+"Select> "+color.END))
-      
+
+         if str(stageSelect) == triggerValue and armSelectionTriggerNotice == True:
+            cpydLog("warn",str("Selection notice trap has been triggered"))
+            clear()
+            armSelectionTriggerNotice = False
+            cpydLog("info",str("Disarming notice selection trigger"))
+            cpydLog("info",str("Requesting notice display"))
+            showNotice()
+
          if stageSelect == "1":
             cpydLog("ok",str("Using default value of "+str(defaultValue)))
             USR_CFG = "boot.sh"
