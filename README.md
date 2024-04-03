@@ -12,6 +12,21 @@ Helping you build the ultimate macOS virtual machine, powered by KVM.
 
 ***
 
+<img align="left" width="100" height="100" src="https://github.com/Coopydood/ultimate-macOS-KVM/assets/39441479/823f6dc7-d656-4c34-86d8-3d5b56b75bb9">
+<img align="left" src="https://github.com/Coopydood/ultimate-macOS-KVM/assets/39441479/8f69f9b9-cf23-4e8b-adf3-95862a23e2ba" height=300 width=2 />
+
+<h3>macOS Sonoma 14.4 Update<br><sub>Important Information</sub></h3>
+
+There have been widespread reports of USB issues surrounding the latest **macOS 14.4 Update**, including on Apple's own hardware, that [appear to be preventing QEMU's virtual mouse and keyboard from working](https://github.com/Coopydood/ultimate-macOS-KVM/issues/78).
+
+**As of ULTMOS [v0.11.2](https://github.com/Coopydood/ultimate-macOS-KVM/blob/main/docs/changelogs/v0-11-2.md), a fix has been implemented. Thank you for your patience.**
+
+Please update and regenerate any AutoPilot files created using prior versions of the project.
+
+ <br>
+
+***
+
 ## 👋》Introduction
 
 Tired of all the restraints and poor performance of macOS VMs in hypervisors like VirtualBox or VMware? Well, the story changes when you run your virtual machines in **kernel space**. Welcome to the world of **K**ernel **V**irtual **M**achines.
