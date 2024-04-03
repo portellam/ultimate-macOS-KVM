@@ -47,6 +47,7 @@ parser.add_argument("--skip-summary", dest="skipSummary", help="Starts the AutoP
 parser.add_argument("--skip-notices", dest="skipNotices", help="Don't download and load notices",action="store_true")
 parser.add_argument("--no-auto-download", dest="customDownload", help="Asks the user what to download during run",action="store_true")
 parser.add_argument("--no-cleanup", dest="disableCleanup", help="Doesn't clean blob files after run",action="store_true")
+parser.add_argument("--use-local-notices", dest="useLocalNotices", help="Don't fetch online notices, use local only (DEBUG ONLY)",action="store_true")
 
 
 
@@ -91,6 +92,11 @@ if args.skipNotices == True:
 else:
    skipNotices = False
 
+if args.useLocalNotices == True:
+   localNotices = True
+else:
+   localNotices = False
+
 version = open("./.version")
 version = version.read()
 
@@ -121,22 +127,23 @@ if enableLog == True: # LOG SUPPORT
 
    def cpydLog(logStatus,logMsg,*args):
       logFile = open("./logs/APC_RUN_"+logTime+".log","a")
-      if logStatus == "ok":      logStatus = "[ ✔ ]"
-      if logStatus == "info":    logStatus = "[ ✦ ]"
-      if logStatus == "warn":    logStatus = "[ ⚠ ]"
-      if logStatus == "error":   logStatus = "[ ✖ ]"
-      if logStatus == "fatal":   logStatus = "[ ☠ ]"
-      if logStatus == "wait":    logStatus = "[ ➜ ]"
+      #if logStatus == "ok":      logStatus = "[ ✔ ]"
+      #if logStatus == "info":    logStatus = "[ ✦ ]"
+      #if logStatus == "warn":    logStatus = "[ ⚠ ]"
+      #if logStatus == "error":   logStatus = "[ ✖ ]"
+      #if logStatus == "fatal":   logStatus = "[ ☠ ]"
+      #if logStatus == "wait":    logStatus = "[ ➜ ]"
       
-      #if logStatus == "ok":      logStatus = "[    OK ]"
-      #if logStatus == "info":    logStatus = "[  INFO ]"
-      #if logStatus == "warn":    logStatus = "[  WARN ]"
-      #if logStatus == "error":   logStatus = "[ ERROR ]"
-      #if logStatus == "fatal":   logStatus = "[ FATAL ]"
-      #if logStatus == "wait":    logStatus = "[  WAIT ]"
+      if logStatus == "ok":      logStatus = "[  OK  ]: "
+      if logStatus == "info":    logStatus = "[ INFO ]: "
+      if logStatus == "warn":    logStatus = "[ WARN ]: "
+      if logStatus == "error":   logStatus = "[ ERROR ]:"
+      if logStatus == "fatal":   logStatus = "[ FATAL ]:"
+      if logStatus == "wait":    logStatus = "[ WAIT ]: "
+      if logStatus == "debug":   logStatus = "[ DEBUG ]:"
       entryTime = str(datetime.today().strftime('%H:%M:%S.%f'))
       entryTime = entryTime[:-3]
-      entryLine = ("["+entryTime+"]"+str(logStatus)+":  "+str(logMsg)+"\n")
+      entryLine = ("["+entryTime+"]"+str(logStatus)+" "+str(logMsg)+"\n")
       logFile.write(entryLine)
       #os.system("cp ./logs/APC_RUN_"+logTime+".log ./logs/latest.log")
       logFile.close()
@@ -183,16 +190,19 @@ def startup():
    if skipNotices == True:
       cpydLog("warn",("Skipping notice list"))
    else:
-      cpydLog("info",("Downloading notice list"))
-      if os.path.exists("./resources/.notices"): os.system("rm ./resources/.notices")
-      try:
-         os.system("wget --output-document=./resources/.notices -q --no-cache --no-cookies --no-dns-cache --no-check-certificate https://gist.github.com/Coopydood/b0887a6e21614c7c490ab3969662407f/raw/notices.json")
-      except Exception:
-         skipNotices = True
-         cpydLog("error",("Couldn't download notice list, skipping for this session"))
-         return False
+      if localNotices != True:
+         cpydLog("info",("Downloading notice list"))
+         if os.path.exists("./resources/.notices"): os.system("rm ./resources/.notices")
+         try:
+            os.system("wget --output-document=./resources/.notices -q --no-cache --no-cookies --no-dns-cache --no-check-certificate https://gist.github.com/Coopydood/b0887a6e21614c7c490ab3969662407f/raw/notices.json")
+            cpydLog("ok",("Notice list downloaded"))
+         except Exception:
+            skipNotices = True
+            cpydLog("error",("Couldn't download notice list, skipping for this session"))
+            return False
+      else:
+         cpydLog("debug",("Using local notices only, --use-local-notices flag specified"))
       if os.path.exists("./resources/.notices"): 
-         cpydLog("ok",("Notice list downloaded"))
          cpydLog("info",("Checking notice list"))
          try:
             noticeFile = open("resources/.notices")
@@ -313,10 +323,10 @@ def showNotice():
       if activeNotice["detailsL5"] != "": print("  ",activeNotice["detailsL5"])
       if activeNotice["detailsL6"] != "": print("  ",activeNotice["detailsL6"])
       if activeNotice["detailsL7"] != "": print("  ",activeNotice["detailsL7"])
-      if activeNotice["blockAccess"] != True: 
-         print("\n  ",color.BOLD+color.GREEN+"◆"+color.END+color.BOLD+"  You can still continue."+color.END)
-      else:
-         print("\n  ",color.BOLD+color.RED+"◆"+color.END+color.BOLD+"  You cannot continue."+color.END)
+      if activeNotice["blockAccess"] != True and activeNotice["type"] != "info": 
+         print("\n  ",color.BOLD+"You "+color.GREEN+"can"+color.END+color.BOLD+" still continue."+color.END)
+      elif activeNotice["type"] != "info":
+         print("\n  ",color.BOLD+"You "+color.RED+"cannot"+color.END+color.BOLD+" continue."+color.END)
       print("\n  ",color.BOLD+"Last updated:",color.END+str(datetime.fromtimestamp(os.path.getmtime("./resources/.notices")).strftime("%d/%m/%Y %H:%M:%S"))+"\n")
       
 
@@ -325,7 +335,7 @@ def showNotice():
          print(color.BOLD+"      1. Continue")
          
       else:
-         cpydLog("fatal",("Critical notice, user cannot continue this flow"))
+         cpydLog("error",("Critical notice, user cannot continue this flow"))
       if activeNotice["hasGitIssue"] == True: print(color.END+"      I. Open issue page...")
       print(color.END+"      B. Back...\n")
       #print(color.END+"      Q. Exit\n")
@@ -3095,6 +3105,9 @@ def autopilot():
             cpydLog("warn",("Physical disk requested, changing type to RAW"))
             configData = configData.replace("file=\"$HDD_PATH\",format=qcow2","file=\"$HDD_PATH\",format=raw")
             configData = configData.replace("REQUIRES_SUDO=0","REQUIRES_SUDO=1")
+
+         if USR_TARGET_OS_ID == "sonoma": # APPLY 14.4 FIX
+            configData = configData.replace("-device usb-ehci,id=ehci","#-device usb-ehci,id=ehci")
 
          if USR_HDD_TYPE == "HDD":
             cpydLog("ok",("Disk type is HDD, leaving rotation rate as default"))
