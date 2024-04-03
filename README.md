@@ -259,6 +259,7 @@ This is my way of giving back to the QEMU, KVM, and VFIO community. Please don't
 
 - I'm not responsible for any time you waste using this project.
 - I'm not responsible if you make an oopsie whoopsie.
+- I have no affiliation with OpenCore and have no developmental experience with it.
 - Expect headaches. Some severe.
 - You need a LOT of patience. I mean it. Despite me trying to alleviate some of the hassles, you WILL run into [stupid gotchas](https://github.com/Coopydood/ultimate-macOS-KVM/wiki/Issues-and-Troubleshooting) that require trial and error out of my control.
 - I'm by no means an expert on this stuff nor would I claim to be.
